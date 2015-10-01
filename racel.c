@@ -1,51 +1,87 @@
 
-#include <stdio.h>    // Used for printf() statements
-#include <wiringPi.h> // Include WiringPi library!
-#include <softPwm.h>
-#include <wiringPiSPI.h>
+#include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 #include <signal.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <softPwm.h>
 
+#include "move.h"
+
+#define BUFF_SIZE	20
+#define FORWARD		'F'
+#define BACK		'B'	
+#define LEFT		'L'
+#define RIGHT		'R'
+#define START_VAL	32767
+
+//Input pins for encoders
 int enc1Pin1 = 17;
 int enc1Pin2 = 27;
-int enc2Pin1 = 16;
-int enc2Pin2 = 20;
-int pwmPin = 18; // PWM LED - Broadcom pin 18, P1 pin 12
-int m1pin = 23; // Regular LED - Broadcom pin 23, P1 pin 16
-int m2pin = 21;
+int enc2Pin1 = 20;
+int enc2Pin2 = 16;
 
-unsigned int stateEnc1=32767;
-unsigned int stateEnc2=32767;
-
-char Buff[100];
+//initial value for encoders
+unsigned int stateEnc1 = START_VAL;
+unsigned int stateEnc2 = START_VAL;
 
 void sig_handler(int signo)
 {
-	if (signo == SIGINT)
-	printf("received SIGINT\n");
-	pwmWrite(pwmPin, 0);
+	if (signo == SIGINT){
+		printf("received SIGINT\n");
+		softPwmWrite(m1pwm,0);
+		softPwmWrite(m2pwm,0);
+		exit(0);
+	}
+}
+
+void timer_handler(int signo){
+	if (signo >= SIGALRM){
+		//printf("received SIGALRM\n");
+		if(Mot1Dir){
+			if(stateEnc1 > endDistance1)
+				softPwmWrite(m1pwm,0);
+				//pwmWrite(pwmPin, 0);
+		}
+		else {
+			if(stateEnc1 < endDistance1)
+				softPwmWrite(m1pwm,0);
+				//pwmWrite(pwmPin, 0);	
+		}
+		if(Mot2Dir){
+			if(stateEnc2 > endDistance2)
+				softPwmWrite(m2pwm,0);
+				//pwmWrite(pwmPin, 0);
+		}
+		else {
+			if(stateEnc2 < endDistance2)
+				softPwmWrite(m2pwm,0);
+				//pwmWrite(pwmPin, 0);
+		}
+	}
 }
 
 void UpdateEncoder1(){
 
 	printf("UpdateEncoder1\n");
 	static char e1p1Old=0;
-	char e1p1=0;
-	char e1p2=0;
-	char e2p1=0;
-	char e2p2=0;
+	unsigned char e1p1=0;
+	unsigned char e1p2=0;
 
 	e1p1=digitalRead(enc1Pin1);
+	printf("e1p1 %d\n",e1p1);
 	e1p2=digitalRead(enc1Pin2);
+	printf("e1p2 %d\n",e1p2);
 
-	if(!e1p1Old == e1p1){
-		if(enc1Pin2)
+	if(e1p1Old && !e1p1){
+		if(e1p2)
 			stateEnc1++;
 		else
 			stateEnc1--;
 	}
-	
+	e1p1Old=e1p1;
+	printf("State stateEnc1 %d\n", stateEnc1);
 }
 
 void UpdateEncoder2(){
@@ -54,16 +90,19 @@ void UpdateEncoder2(){
 	char e2p1=0;
 	char e2p2=0;
 
-	e2p1=digitalRead(enc1Pin1);
-	e2p2=digitalRead(enc1Pin2);
+	e2p1=digitalRead(enc2Pin1);
+	printf("e2p1 %d\n",e2p1);
+	e2p2=digitalRead(enc2Pin2);
+	printf("e2p2 %d", e2p2);
 
-	if(!e2p1Old == e2p1){
-		if(enc2Pin2)
+	if(e2p1Old && !e2p1){
+		if(e2p2)
 			stateEnc2++;
 		else
 			stateEnc2--;
 	}
-	
+	e2p1Old=e2p1;
+	printf("State stateEnc2 %d\n", stateEnc2);
 }
 
 void enc1Pin1func(){
@@ -82,127 +121,86 @@ void enc2Pin2func(){
 	UpdateEncoder2();	
 }
 
-int main(void)
-{
+int main(){
+
+	struct sigaction act;
 
 	wiringPiSetupGpio(); // Initialize wiringPi -- using Broadcom pin numbers
 	printf("wiring pi setup done\n");
-	pinMode(pwmPin, PWM_OUTPUT); // Set PWMas PWM output
-	pinMode(m1pin, OUTPUT);     // 
-	pinMode(m2pin, OUTPUT);      // 
+	//pinMode(pwmPin, PWM_OUTPUT); // Set PWMas PWM output
+	pinMode(m1pin, OUTPUT);      
+	pinMode(m2pin, OUTPUT);
+	pinMode(m1pwm, OUTPUT);
+	pinMode(m2pwm, OUTPUT);      
 	pinMode(enc1Pin1, INPUT);
 	pinMode(enc1Pin2, INPUT);
 	pinMode(enc2Pin1, INPUT);
 	pinMode(enc2Pin2, INPUT);
 
+	softPwmCreate(m1pwm, 0, 100);
+	softPwmCreate(m2pwm, 0, 100);
 
-//	pullUpDnControl(butPin, PUD_UP); // Enable pull-up resistor on button
+	signal(SIGINT, sig_handler);
 
-	char RetVal = -1;
+	act.sa_handler = timer_handler;
 
-	int pwmValue;
-	char statusMove = 0;
-	char statusStop = 0;
+	sigaction(SIGALRM, &act, 0);
+	ualarm(10000, 10000);
 
-	char MotorDir1 = 0;
-	char MotorDir2 = 1;
+	char pom;
+	int speed;
+	int distance;
 
-	char distance[4];
-	char intesity[4];
-	unsigned int iDistance1=0;
-	unsigned int iDistance2=0;
-	unsigned int stateDistance1=0;
-	unsigned int stateDistance2=0;
+	char speedStr[4];
+	char distanceStr[5];
+	char Buff[BUFF_SIZE];
 
-	char BuffFlag = -1;
+	printf("MAU\n");
 
 	wiringPiISR(enc1Pin1, INT_EDGE_BOTH, &enc1Pin1func);
 	wiringPiISR(enc1Pin2, INT_EDGE_BOTH, &enc1Pin2func);
 	wiringPiISR(enc2Pin1, INT_EDGE_BOTH, &enc2Pin1func);
 	wiringPiISR(enc2Pin2, INT_EDGE_BOTH, &enc2Pin2func);
 
-	RetVal=wiringPiSPISetup (0, 500000);
+	printf("Enter command\n");
+	while(1){
 
-	while(1)
-	{
-		
-		if(statusMove){
-			statusMove=0;
-			printf("statusMove\n");
-			digitalWrite(m1pin, MotorDir1); 
-			digitalWrite(m2pin, MotorDir2); 
-			pwmWrite(pwmPin, pwmValue);
-		}
-		if(statusStop){
-			printf("statusStop\n");
-			statusStop=0;
-			pwmWrite(pwmPin, 0);
-			statusMove=1;
-		}
+			
 
-		BuffFlag = wiringPiSPIDataRW (0, Buff, 100);
-		if(!BuffFlag && !statusMove){
-			printf("Command from SPI %s", Buff);
+		if(fgets(Buff, BUFF_SIZE, stdin) != NULL){
+			
+			printf("Buff\t%s\n", Buff);
+
+			strncpy(speedStr, &Buff[1], 4);
+			speed=atoi(speedStr);
+			strncpy(distanceStr, &Buff[5], 4);
+			distance=atoi(distanceStr);
+			printf("Move with speed %d to distance %d\n", speed, distance);
 			switch(Buff[0]){
-				case 'F':{
-					printf("case F in\n");
-					memcpy(&Buff[1], intesity, 4);
-					memcpy(&Buff[1], distance, 4);
-					pwmValue=atoi(intesity);
-					iDistance1=atoi(distance);
-					iDistance2=atoi(distance);
-					stateDistance1+=iDistance1;
-					stateDistance2+=iDistance2;
-					MotorDir1=1;
-					MotorDir2=0;
-					
-					
+
+				case FORWARD:{
+					printf("Move forward\n");
+
+					moveForward(speed, distance);
+					break;
 				}
-				case 'B':{
-					printf("case B in\n");
-					memcpy(&Buff[1], intesity, 4);
-					memcpy(&Buff[1], distance, 4);
-					pwmValue=atoi(intesity);
-					iDistance1=atoi(distance);
-					iDistance2=atoi(distance);
-					stateDistance1-=iDistance1;
-					stateDistance2-=iDistance2;
-					MotorDir1=1;
-					MotorDir2=1;
+				case BACK:{
+					printf("Move back\n");
+					moveBack(speed, distance);
+					break;
 				}
-				case 'L':{
-					printf("case L in\n");
-					memcpy(&Buff[1], intesity, 4);
-					memcpy(&Buff[1], distance, 4);
-					pwmValue=atoi(intesity);
-					iDistance1=atoi(distance);
-					iDistance2=atoi(distance);
-					stateDistance1+=iDistance1;
-					stateDistance2-=iDistance2;
-					MotorDir1=0;
-					MotorDir2=0;
+				case LEFT:{
+					printf("Move left\n");
+					moveLeft(speed, distance);
+					break;
 				}
-				case 'R':{
-					printf("case R in\n");
-					memcpy(&Buff[1], intesity, 4);
-					memcpy(&Buff[1], distance, 4);
-					pwmValue=atoi(intesity);
-					iDistance1=atoi(distance);
-					iDistance2=atoi(distance);
-					stateDistance1-=iDistance1;
-					stateDistance2+=iDistance2;
-					MotorDir1=0;
-					MotorDir2=1;
+				case RIGHT:{
+					printf("Move right\n");
+					moveRight(speed, distance);
+					break;
 				}
 			}
 		}
-		if(stateEnc1 == stateDistance1)
-			statusStop=0;
-
-		if(stateEnc2 == stateDistance2)
-			statusStop=0;
-		
 	}
-
 	return 0;
 }
