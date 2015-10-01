@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <softPwm.h>
-
 #include "move.h"
 
 #define BUFF_SIZE	20
@@ -29,7 +28,7 @@ unsigned int stateEnc2 = START_VAL;
 void sig_handler(int signo)
 {
 	if (signo == SIGINT){
-		printf("received SIGINT\n");
+		printf("\nreceived SIGINT\n");
 		softPwmWrite(m1pwm,0);
 		softPwmWrite(m2pwm,0);
 		exit(0);
@@ -38,41 +37,39 @@ void sig_handler(int signo)
 
 void timer_handler(int signo){
 	if (signo >= SIGALRM){
-		//printf("received SIGALRM\n");
 		if(Mot1Dir){
-			if(stateEnc1 > endDistance1)
+			if(stateEnc1 > endDistance1){
 				softPwmWrite(m1pwm,0);
-				//pwmWrite(pwmPin, 0);
+			}
 		}
 		else {
-			if(stateEnc1 < endDistance1)
+			if(stateEnc1 < endDistance1){
 				softPwmWrite(m1pwm,0);
-				//pwmWrite(pwmPin, 0);	
+			}
 		}
 		if(Mot2Dir){
-			if(stateEnc2 > endDistance2)
+			if(stateEnc2 > endDistance2){
 				softPwmWrite(m2pwm,0);
-				//pwmWrite(pwmPin, 0);
+			}
 		}
 		else {
-			if(stateEnc2 < endDistance2)
+			if(stateEnc2 < endDistance2){
 				softPwmWrite(m2pwm,0);
-				//pwmWrite(pwmPin, 0);
+			}
 		}
 	}
 }
 
 void UpdateEncoder1(){
-
-	printf("UpdateEncoder1\n");
+	//printf("UpdateEncoder1\n");
 	static char e1p1Old=0;
 	unsigned char e1p1=0;
 	unsigned char e1p2=0;
 
 	e1p1=digitalRead(enc1Pin1);
-	printf("e1p1 %d\n",e1p1);
+	//printf("e1p1 %d\n",e1p1);
 	e1p2=digitalRead(enc1Pin2);
-	printf("e1p2 %d\n",e1p2);
+	//printf("e1p2 %d\n",e1p2);
 
 	if(e1p1Old && !e1p1){
 		if(e1p2)
@@ -81,19 +78,19 @@ void UpdateEncoder1(){
 			stateEnc1--;
 	}
 	e1p1Old=e1p1;
-	printf("State stateEnc1 %d\n", stateEnc1);
+	//printf("State stateEnc1 %d\n", stateEnc1);
 }
 
 void UpdateEncoder2(){
-	printf("UpdateEncoder2\n");
+	//printf("UpdateEncoder2\n");
 	static char e2p1Old=0;
 	char e2p1=0;
 	char e2p2=0;
 
 	e2p1=digitalRead(enc2Pin1);
-	printf("e2p1 %d\n",e2p1);
+	//printf("e2p1 %d\n",e2p1);
 	e2p2=digitalRead(enc2Pin2);
-	printf("e2p2 %d", e2p2);
+	//printf("e2p2 %d", e2p2);
 
 	if(e2p1Old && !e2p1){
 		if(e2p2)
@@ -102,7 +99,7 @@ void UpdateEncoder2(){
 			stateEnc2--;
 	}
 	e2p1Old=e2p1;
-	printf("State stateEnc2 %d\n", stateEnc2);
+	//printf("State stateEnc2 %d\n", stateEnc2);
 }
 
 void enc1Pin1func(){
@@ -121,13 +118,11 @@ void enc2Pin2func(){
 	UpdateEncoder2();	
 }
 
-int main(){
+int Initialization(){
 
-	struct sigaction act;
-
-	wiringPiSetupGpio(); // Initialize wiringPi -- using Broadcom pin numbers
+	wiringPiSetupGpio();
 	printf("wiring pi setup done\n");
-	//pinMode(pwmPin, PWM_OUTPUT); // Set PWMas PWM output
+	// Inicialize pins
 	pinMode(m1pin, OUTPUT);      
 	pinMode(m2pin, OUTPUT);
 	pinMode(m1pwm, OUTPUT);
@@ -136,16 +131,19 @@ int main(){
 	pinMode(enc1Pin2, INPUT);
 	pinMode(enc2Pin1, INPUT);
 	pinMode(enc2Pin2, INPUT);
-
+	//Inicialize PWM
 	softPwmCreate(m1pwm, 0, 100);
 	softPwmCreate(m2pwm, 0, 100);
+	//Setup external inetrrupts
+	wiringPiISR(enc1Pin1, INT_EDGE_BOTH, &enc1Pin1func);
+	wiringPiISR(enc1Pin2, INT_EDGE_BOTH, &enc1Pin2func);
+	wiringPiISR(enc2Pin1, INT_EDGE_BOTH, &enc2Pin1func);
+	wiringPiISR(enc2Pin2, INT_EDGE_BOTH, &enc2Pin2func);
 
-	signal(SIGINT, sig_handler);
+	return 0;
+}
 
-	act.sa_handler = timer_handler;
-
-	sigaction(SIGALRM, &act, 0);
-	ualarm(10000, 10000);
+int main(){
 
 	char pom;
 	int speed;
@@ -155,18 +153,21 @@ int main(){
 	char distanceStr[5];
 	char Buff[BUFF_SIZE];
 
-	printf("MAU\n");
+	struct sigaction act;
 
-	wiringPiISR(enc1Pin1, INT_EDGE_BOTH, &enc1Pin1func);
-	wiringPiISR(enc1Pin2, INT_EDGE_BOTH, &enc1Pin2func);
-	wiringPiISR(enc2Pin1, INT_EDGE_BOTH, &enc2Pin1func);
-	wiringPiISR(enc2Pin2, INT_EDGE_BOTH, &enc2Pin2func);
+	//Initialization SIGINT AND SIGALARM
+	signal(SIGINT, sig_handler);
+	act.sa_handler = timer_handler;
+	sigaction(SIGALRM, &act, 0);
+	ualarm(10000, 10000);
+
+	if(Initialization())
+		printf("Error in Initialization\n");
+	else
+		printf("Initialization done\n");
 
 	printf("Enter command\n");
 	while(1){
-
-			
-
 		if(fgets(Buff, BUFF_SIZE, stdin) != NULL){
 			
 			printf("Buff\t%s\n", Buff);

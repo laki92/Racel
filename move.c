@@ -16,7 +16,6 @@ char Mot2Dir;
 
 int moveForward(int speed, int distance){
 	//Protection for H bridge
-	//pwmWrite(pwmPin, 0);
 	softPwmWrite(m1pwm,0);
 	softPwmWrite(m2pwm,0);
 	printf("Status of sistem is move move forward speed=%d distance=%d\n", speed, distance);
@@ -29,16 +28,15 @@ int moveForward(int speed, int distance){
 	//direction of motors
 	Mot1Dir=1;
 	Mot2Dir=0;
-
 	//setup speed
 	softPwmWrite(m1pwm,speed);
 	softPwmWrite(m2pwm,speed);
-	//pwmWrite(pwmPin, speed);
 }
 
 int moveBack(int speed, int distance){
 	//Protection for H bridge
-	pwmWrite(pwmPin, 0);
+	softPwmWrite(m1pwm,0);
+	softPwmWrite(m2pwm,0);
 	printf("Status of sistem is move move back\n");
 	//setup direction of motors
 	digitalWrite(m1pin, 0); 
@@ -52,12 +50,12 @@ int moveBack(int speed, int distance){
 	//setup speed
 	softPwmWrite(m1pwm,speed);
 	softPwmWrite(m2pwm,speed);
-	//pwmWrite(pwmPin, speed);
 }
 
 int moveLeft(int speed, int distance){	
 //Protection for H bridge
-	pwmWrite(pwmPin, 0);
+	softPwmWrite(m1pwm,0);
+	softPwmWrite(m2pwm,0);
 	printf("Status of sistem is move move left\n");
 	//setup direction of motors
 	digitalWrite(m1pin, 0); 
@@ -71,12 +69,12 @@ int moveLeft(int speed, int distance){
 	//setup speed
 	softPwmWrite(m1pwm,speed);
 	softPwmWrite(m2pwm,speed);
-	//pwmWrite(pwmPin, speed);
 }
 
 int moveRight(int speed, int distance){
 	//Protection for H bridge
-	pwmWrite(pwmPin, 0);
+	softPwmWrite(m1pwm,0);
+	softPwmWrite(m2pwm,0);
 	printf("Status of sistem is move move rght\n");
 	//setup direction of motors
 	digitalWrite(m1pin, 1); 
@@ -90,5 +88,4 @@ int moveRight(int speed, int distance){
 	//setup speed
 	softPwmWrite(m1pwm,speed);
 	softPwmWrite(m2pwm,speed);
-	//pwmWrite(pwmPin, speed);
 }
